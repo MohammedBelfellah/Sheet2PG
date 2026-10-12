@@ -1,0 +1,57 @@
+{
+  "name": "feuille-vers-postgresql",
+  "version": "0.1.0",
+  "description": "Importateur de fichiers CSV, XLSX et XLS vers PostgreSQL",
+  "main": "dist-electron/principal/principal.js",
+  "type": "module",
+  "scripts": {
+    "developper": "node scripts/developper.mjs",
+    "verifier": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "tester": "vitest run",
+    "construire": "npm run verifier && vite build && tsc -p tsconfig.electron.json",
+    "demarrer": "electron .",
+    "empaqueter:windows": "npm run construire && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "iconv-lite": "^0.7.0",
+    "pg": "^8.16.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "app-builder-bin": "4.2.0",
+    "@types/node": "^24.10.0",
+    "@types/pg": "^8.15.5",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^44.7.0",
+    "electron-builder": "26.5.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2",
+    "vitest": "^4.0.8"
+  },
+  "build": {
+    "appId": "ma.sheet2pg.importateur",
+    "productName": "Feuille vers PostgreSQL",
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "livrables"
+    },
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

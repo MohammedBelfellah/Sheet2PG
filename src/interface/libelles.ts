@@ -1,0 +1,22 @@
+export const libelles = {
+  application: 'Feuille vers PostgreSQL',
+  sousTitre: 'Excel et CSV vers PostgreSQL',
+  source: 'Source',
+  destination: 'Destination',
+  colonnes: 'Colonnes et conversion',
+  apercu: 'Aperçu',
+  parcourir: 'Parcourir les fichiers',
+  deposer: 'Déposez ici un fichier Excel ou CSV',
+  changer: 'Changer de fichier',
+  connecter: 'Se connecter',
+  valider: 'Valider',
+  importer: 'Importer',
+  annuler: 'Annuler',
+  tableExistante: 'Table existante',
+  nouvelleTable: 'Créer une table',
+  nonConnecte: 'Non connecté',
+  connexion: 'Connexion…',
+  connecte: 'Connecté',
+  echec: 'Échec',
+  perime: 'Connexion à revérifier'
+} as const
