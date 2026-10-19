@@ -4,8 +4,9 @@ import { join as joindreChemin } from 'node:path'
 import { z as validation } from 'zod'
 import type { PlanImportation, ProblemeImportation } from '../partage/modeles.js'
 import { connecterBase, deconnecterBase, decrireTable, fermerToutesConnexions, listerTables } from './service-base.js'
-import { inspecterFichier } from './service-fichiers.js'
+import { inspecterFichier, oublierSource } from './service-fichiers.js'
 import { annulerTravail, demarrerImportation, validerPlan } from './service-importation.js'
+import { lireDernierDossierSource, memoriserDernierDossierSource } from './service-preferences.js'
 
 const estDeveloppement = Boolean(process.env.ADRESSE_DEVELOPPEMENT)
 let fenetrePrincipale: InstanceType<typeof Fenetre> | null = null
@@ -16,7 +17,7 @@ const schemaOptionsInspection = validation.object({
   feuille: validation.string().max(255).optional(),
   modeEntete: validation.enum(['automatique', 'ligne', 'sans_entete']).optional(),
   ligneEntete: validation.number().int().min(1).max(1_048_576).optional(),
-  separateur: validation.enum([',', ';', '\t']).optional(),
+  separateur: validation.enum([',', ';', '\t', '|']).optional(),
   encodage: validation.enum(['utf8', 'windows-1252', 'latin1']).optional()
 })
 
@@ -65,14 +66,25 @@ function echapperCsv(valeur: unknown): string {
 function installerCommunication(): void {
   communication.handle('source:choisir', async (evenement) => {
     verifierEmetteur(evenement)
-    const choix = await dialogue.showOpenDialog(fenetrePrincipale!, { properties: ['openFile'], filters: [{ name: 'Feuilles de données', extensions: ['csv', 'xlsx', 'xls'] }] })
+    const cheminPreferences = joindreChemin(application.getPath('userData'), 'preferences.json')
+    const dernierDossier = await lireDernierDossierSource(cheminPreferences)
+    const choix = await dialogue.showOpenDialog(fenetrePrincipale!, {
+      defaultPath: dernierDossier,
+      properties: ['openFile'],
+      filters: [{ name: 'Feuilles de données', extensions: ['csv', 'txt', 'xlsx', 'xls'] }]
+    })
     if (choix.canceled || !choix.filePaths[0]) return null
+    await memoriserDernierDossierSource(cheminPreferences, choix.filePaths[0])
     return inspecterFichier(choix.filePaths[0], {})
   })
   communication.handle('source:inspecter', async (evenement, donnees) => {
     verifierEmetteur(evenement)
     const options = schemaOptionsInspection.parse(donnees)
     return inspecterFichier(options.cheminDepose, options)
+  })
+  communication.handle('source:oublier', async (evenement, id) => {
+    verifierEmetteur(evenement)
+    return oublierSource(validation.string().uuid().parse(id))
   })
   communication.handle('base:connecter', async (evenement, donnees) => {
     verifierEmetteur(evenement)

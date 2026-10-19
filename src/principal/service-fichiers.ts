@@ -10,6 +10,7 @@ import type {
   LigneApercu,
   ModeEntete,
   OptionsInspection,
+  SeparateurSource,
   TypeCreation,
   ValeurCellule
 } from '../partage/modeles.js'
@@ -29,12 +30,12 @@ interface SourceMemoire {
 }
 
 const sources = new Map<string, SourceMemoire>()
-const extensionsPermises = new Set(['.csv', '.xlsx', '.xls'])
+const extensionsPermises = new Set(['.csv', '.txt', '.xlsx', '.xls'])
 
 function extensionValide(chemin: string): ExtensionSource {
   const extension = extensionNom(chemin).toLowerCase()
   if (!extensionsPermises.has(extension)) {
-    throw new Error('Format non pris en charge. Choisissez un fichier CSV, XLSX ou XLS.')
+    throw new Error('Format non pris en charge. Choisissez un fichier CSV, TXT, XLSX ou XLS.')
   }
   return extension.slice(1) as ExtensionSource
 }
@@ -45,10 +46,10 @@ function detecterEncodage(contenu: Buffer): 'utf8' | 'windows-1252' {
   return texte.includes('\uFFFD') ? 'windows-1252' : 'utf8'
 }
 
-function detecterSeparateur(texte: string): ',' | ';' | '\t' {
+function detecterSeparateur(texte: string): SeparateurSource {
   const lignes = texte.split(/\r?\n/).slice(0, 8).filter(Boolean)
-  const candidats = [',', ';', '\t'] as const
-  let meilleur: ',' | ';' | '\t' = ','
+  const candidats: SeparateurSource[] = [',', ';', '\t', '|']
+  let meilleur: SeparateurSource = ','
   let meilleurScore = -1
   for (const candidat of candidats) {
     const comptes = lignes.map((ligne) => ligne.split(candidat).length - 1)
@@ -86,12 +87,13 @@ function suggererType(valeurs: ValeurCellule[]): TypeCreation {
   if (!presentes.length) return 'texte'
   const chaines = presentes.map(String)
   if (chaines.some((valeur) => /^0\d+/.test(valeur))) return 'texte'
+  if (presentes.every((valeur) => typeof valeur === 'boolean') || chaines.every((valeur) => /^(true|false|vrai|faux|oui|non)$/i.test(valeur))) return 'booleen'
+  if (chaines.every((valeur) => /^\d{4}-\d{2}-\d{2}[ T]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(valeur))) return 'horodatage'
+  if (chaines.every((valeur) => /^\d{4}-\d{2}-\d{2}$/.test(valeur) || /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(valeur))) return 'date'
   if (chaines.every((valeur) => /^[-+]?\d+$/.test(valeur))) {
     return chaines.some((valeur) => valeur.replace(/^[-+]/, '').length > 9) ? 'grand_entier' : 'entier'
   }
   if (chaines.every((valeur) => /^[-+]?\d+(?:[.,]\d+)?$/.test(valeur))) return 'decimal'
-  if (chaines.every((valeur) => /^(true|false|vrai|faux|oui|non|0|1)$/i.test(valeur))) return 'booleen'
-  if (chaines.every((valeur) => /^\d{4}-\d{2}-\d{2}$/.test(valeur) || /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(valeur))) return 'date'
   return 'texte'
 }
 
@@ -138,7 +140,7 @@ async function chargerSource(chemin: string, options: OptionsInspection): Promis
   const avertissements: string[] = []
   const format: { separateur?: string; encodage?: string } = {}
   try {
-    if (extension === 'csv') {
+    if (extension === 'csv' || extension === 'txt') {
       const encodage = options.encodage ?? detecterEncodage(contenu)
       const texte = iconv.decode(contenu, encodage)
       const separateur = options.separateur ?? detecterSeparateur(texte)
@@ -170,7 +172,7 @@ export async function inspecterFichier(chemin: string | undefined, options: Opti
   if (!source && chemin) {
     source = await chargerSource(chemin, options)
     sources.set(source.id, source)
-  } else if (source && source.extension === 'csv' && (options.encodage || options.separateur)) {
+  } else if (source && (source.extension === 'csv' || source.extension === 'txt') && (options.encodage || options.separateur)) {
     const rechargee = await chargerSource(source.chemin, options)
     sources.delete(source.id)
     rechargee.id = source.id
@@ -259,6 +261,10 @@ export function obtenirSource(idSource: string): SourceMemoire {
   const source = sources.get(idSource)
   if (!source || !source.inspection || !source.donnees) throw new Error('La source n’est plus disponible.')
   return source
+}
+
+export function oublierSource(idSource: string): boolean {
+  return sources.delete(idSource)
 }
 
 export async function verifierEmpreinteSource(idSource: string, empreinteAttendue: string): Promise<boolean> {

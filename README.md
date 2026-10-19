@@ -1,6 +1,10 @@
 # Feuille vers PostgreSQL
 
-Application de bureau Windows pour importer un fichier CSV, XLSX ou XLS dans PostgreSQL sans écrire de SQL. Elle permet de choisir une feuille et une ligne d’en-tête, de mapper les colonnes, de vérifier toutes les valeurs, d’ignorer les doublons selon une règle visible et d’effectuer une insertion transactionnelle uniquement.
+Application de bureau Windows pour importer un fichier CSV, TXT, XLSX ou XLS dans PostgreSQL sans écrire de SQL. Elle permet de choisir une feuille et une ligne d’en-tête, de mapper les colonnes, de vérifier toutes les valeurs, d’ignorer les doublons selon une règle visible et d’effectuer une insertion transactionnelle uniquement.
+
+Les fichiers CSV et TXT peuvent utiliser une virgule, un point-virgule, une tabulation ou une barre verticale comme séparateur de colonnes. Le séparateur et l’encodage sont détectés automatiquement et restent modifiables avant l’importation.
+
+Le sélecteur de fichier se rouvre dans le dernier dossier utilisé, y compris après un redémarrage. Seul le chemin du dossier est mémorisé localement ; le fichier source et son contenu ne sont jamais copiés dans les préférences.
 
 ## Prérequis
 
@@ -65,7 +69,7 @@ Les grands entiers et décimaux exacts restent des chaînes jusqu’à leur envo
 
 ## Sécurité et confidentialité
 
-Le moteur d’interface est isolé et exécuté dans le bac à sable Electron, sans intégration Node.js. Le pont expose une opération ciblée par fonction et le processus principal vérifie l’émetteur. Les mots de passe restent uniquement en mémoire, ne sont ni journalisés ni persistés. TLS vérifie toujours le certificat lorsqu’il est activé ; aucun repli silencieux non chiffré n’est effectué.
+Le moteur d’interface est isolé et exécuté dans le bac à sable Electron, sans intégration Node.js. Le pont expose une opération ciblée par fonction et le processus principal vérifie l’émetteur. Les mots de passe restent uniquement en mémoire, ne sont ni journalisés ni persistés. Seul le dernier dossier de sélection est mémorisé localement pour faciliter la prochaine ouverture. TLS vérifie toujours le certificat lorsqu’il est activé ; aucun repli silencieux non chiffré n’est effectué.
 
 ## Dépendances de lecture Excel
 

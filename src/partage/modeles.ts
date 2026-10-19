@@ -1,4 +1,5 @@
-export type ExtensionSource = 'csv' | 'xlsx' | 'xls'
+export type ExtensionSource = 'csv' | 'txt' | 'xlsx' | 'xls'
+export type SeparateurSource = ',' | ';' | '\t' | '|'
 export type ModeEntete = 'automatique' | 'ligne' | 'sans_entete'
 export type ModeDestination = 'existante' | 'nouvelle'
 export type ModeDoublon = 'ligne_exacte' | 'cles'
@@ -52,7 +53,7 @@ export interface OptionsInspection {
   feuille?: string
   modeEntete?: ModeEntete
   ligneEntete?: number
-  separateur?: ',' | ';' | '\t'
+  separateur?: SeparateurSource
   encodage?: 'utf8' | 'windows-1252' | 'latin1'
 }
 
@@ -186,6 +187,7 @@ export interface DemarrageImportation {
 export interface PontApplication {
   choisirSource(): Promise<InspectionSource | null>
   inspecterSource(options: OptionsInspection): Promise<InspectionSource>
+  oublierSource(idSource: string): Promise<boolean>
   cheminFichier(fichier: File): string
   connecter(configuration: ConfigurationConnexion): Promise<ConnexionEtablie>
   deconnecter(idConnexion: string): Promise<void>

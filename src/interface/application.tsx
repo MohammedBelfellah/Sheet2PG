@@ -116,7 +116,7 @@ export function Application() {
         feuille: inspection.feuille,
         modeEntete: inspection.modeEntete,
         ligneEntete: inspection.ligneEntete ?? undefined,
-        separateur: inspection.format.separateur as ',' | ';' | '\t' | undefined,
+        separateur: inspection.format.separateur as ',' | ';' | '\t' | '|' | undefined,
         encodage: inspection.format.encodage as 'utf8' | 'windows-1252' | 'latin1' | undefined,
         ...changements
       })
@@ -298,15 +298,15 @@ export function Application() {
         <article className="panneau">
           <div className="titre-panneau"><div><span className="numero">1</span><h2>{libelles.source}</h2></div>{chargementSource && <span className="chargement">Lecture…</span>}</div>
           {!inspection ? <div className="depot" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) void deposer(e.dataTransfer.files[0]) }}>
-            <div className="icone-fichier">⇧</div><strong>{libelles.deposer}</strong><span>CSV, XLSX ou XLS</span><button onClick={() => void choisirSource()} disabled={chargementSource}>{libelles.parcourir}</button>
+            <div className="icone-fichier">⇧</div><strong>{libelles.deposer}</strong><span>CSV, TXT, XLSX ou XLS</span><button onClick={() => void choisirSource()} disabled={chargementSource}>{libelles.parcourir}</button>
           </div> : <>
             <div className="fichier-selectionne" title={inspection.identite.chemin}>
               <div><strong>{inspection.identite.nom}</strong><span>{inspection.identite.extension.toUpperCase()} · {tailleLisible(inspection.identite.taille)}</span></div>
               <button className="secondaire" onClick={() => void choisirSource()} disabled={modificationInterdite}>{libelles.changer}</button>
             </div>
-            {inspection.identite.extension !== 'csv' && <label>Feuille<select value={inspection.feuille} onChange={(e) => void reInspecter({ feuille: e.target.value })} disabled={modificationInterdite}>{inspection.identite.feuilles.map((feuille) => <option key={feuille.nom} value={feuille.nom}>{feuille.nom}{feuille.vide ? ' (vide)' : ''}</option>)}</select></label>}
-            {inspection.identite.extension === 'csv' && <details className="details"><summary>Paramètres de format</summary><div className="rangee">
-              <label>Séparateur<select value={inspection.format.separateur} onChange={(e) => void reInspecter({ separateur: e.target.value })}><option value=",">Virgule</option><option value=";">Point-virgule</option><option value="\t">Tabulation</option></select></label>
+            {inspection.identite.extension !== 'csv' && inspection.identite.extension !== 'txt' && <label>Feuille<select value={inspection.feuille} onChange={(e) => void reInspecter({ feuille: e.target.value })} disabled={modificationInterdite}>{inspection.identite.feuilles.map((feuille) => <option key={feuille.nom} value={feuille.nom}>{feuille.nom}{feuille.vide ? ' (vide)' : ''}</option>)}</select></label>}
+            {(inspection.identite.extension === 'csv' || inspection.identite.extension === 'txt') && <details className="details"><summary>Paramètres de format</summary><div className="rangee">
+              <label>Séparateur<select value={inspection.format.separateur} onChange={(e) => void reInspecter({ separateur: e.target.value })}><option value=",">Virgule</option><option value=";">Point-virgule</option><option value="\t">Tabulation</option><option value="|">Barre verticale |</option></select></label>
               <label>Encodage<select value={inspection.format.encodage} onChange={(e) => void reInspecter({ encodage: e.target.value })}><option value="utf8">UTF-8</option><option value="windows-1252">Windows-1252</option><option value="latin1">Latin-1</option></select></label>
             </div></details>}
             <fieldset className="entete"><legend>En-tête</legend><div className="segments">

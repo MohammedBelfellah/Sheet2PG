@@ -17,22 +17,16 @@ import type {
   ProgressionTravail,
   ResultatImportation,
   ResultatValidation,
-  TableDestination,
-  TypeCreation
+  TableDestination
 } from '../partage/modeles'
+import {
+  normaliserNomPostgreSQL,
+  preparerCorrespondancesNouvelleTable,
+  typesCreation
+} from './preparation-nouvelle-table'
 
 type Onglet = 'correspondances' | 'apercu' | 'resultats'
 type Notification = { message: string; variante: 'succes' | 'erreur' }
-
-const typesCreation: { valeur: TypeCreation; sql: string; libelle: string }[] = [
-  { valeur: 'texte', sql: 'text', libelle: 'Texte' },
-  { valeur: 'entier', sql: 'integer', libelle: 'Entier' },
-  { valeur: 'grand_entier', sql: 'bigint', libelle: 'Grand entier' },
-  { valeur: 'decimal', sql: 'numeric', libelle: 'Décimal exact' },
-  { valeur: 'booleen', sql: 'boolean', libelle: 'Booléen' },
-  { valeur: 'date', sql: 'date', libelle: 'Date' },
-  { valeur: 'horodatage', sql: 'timestamp without time zone', libelle: 'Horodatage' }
-]
 
 const configurationInitiale: ConfigurationConnexion = {
   emplacement: 'local',
@@ -43,15 +37,6 @@ const configurationInitiale: ConfigurationConnexion = {
   motDePasse: '',
   delaiSecondes: 10,
   ssl: 'desactive'
-}
-
-function normaliserNom(nom: string): string {
-  return nom
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase('fr')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '') || 'colonne'
 }
 
 function tailleLisible(octets: number): string {
@@ -66,6 +51,17 @@ function messageErreur(erreur: unknown): string {
 
 function nomType(type: string): string {
   return type.replace('character varying', 'varchar').replace('timestamp without time zone', 'timestamp')
+}
+
+function estFichierTexte(extension: InspectionSource['identite']['extension']): boolean {
+  return extension === 'csv' || extension === 'txt'
+}
+
+function libelleSeparateur(separateur?: string): string {
+  if (separateur === ';') return 'Point-virgule'
+  if (separateur === '\t') return 'Tabulation'
+  if (separateur === '|') return 'Barre verticale'
+  return 'Virgule'
 }
 
 function Puce({ enfants, variante = 'neutre' }: { enfants: NoeudReact; variante?: 'neutre' | 'succes' | 'bleu' | 'alerte' }) {
@@ -163,7 +159,7 @@ export function ApplicationRefondue() {
         feuille: inspection.feuille,
         modeEntete: inspection.modeEntete,
         ligneEntete: inspection.ligneEntete ?? undefined,
-        separateur: inspection.format.separateur as ',' | ';' | '\t' | undefined,
+        separateur: inspection.format.separateur as ',' | ';' | '\t' | '|' | undefined,
         encodage: inspection.format.encodage as 'utf8' | 'windows-1252' | 'latin1' | undefined,
         ...changements
       })
@@ -276,7 +272,7 @@ export function ApplicationRefondue() {
           continue
         }
         if (modeDestination === 'existante') {
-          const cible = destinations.find((destination) => normaliserNom(destination.nom) === normaliserNom(colonne.nom) && !dejaPrises.has(destination.nom))
+          const cible = destinations.find((destination) => normaliserNomPostgreSQL(destination.nom) === normaliserNomPostgreSQL(colonne.nom) && !dejaPrises.has(destination.nom))
           suivantes[colonne.id] = {
             idSource: colonne.id,
             incluse: colonnesSelectionnees.has(colonne.id),
@@ -286,7 +282,7 @@ export function ApplicationRefondue() {
           }
           if (cible) dejaPrises.add(cible.nom)
         } else {
-          const base = normaliserNom(colonne.nom)
+          const base = normaliserNomPostgreSQL(colonne.nom)
           let nom = base
           let suffixe = 2
           while (dejaPrises.has(nom)) nom = `${base}_${suffixe++}`
@@ -309,23 +305,43 @@ export function ApplicationRefondue() {
     const retirerProgression = window.importateur.ecouterProgression((nouvelle) => definirProgression(nouvelle))
     const retirerResultat = window.importateur.ecouterResultat(({ idTravail: id, resultat: nouveau }) => {
       if (idTravail && id !== idTravail) return
-      definirResultat(nouveau)
       definirIdTravail(null)
       if (nouveau.reussi) {
+        const message = nouveau.compteurs.inseres > 0
+          ? `Importation terminée : ${nouveau.compteurs.inseres} nouvelle${nouveau.compteurs.inseres > 1 ? 's' : ''} ligne${nouveau.compteurs.inseres > 1 ? 's' : ''} ajoutée${nouveau.compteurs.inseres > 1 ? 's' : ''}.`
+          : 'Importation terminée : aucun nouvel enregistrement à ajouter.'
+        if (inspection) void window.importateur.oublierSource(inspection.identite.id).catch(() => undefined)
+        definirInspection(null)
+        definirChargementSource(false)
+        definirErreurSource('')
+        definirColonnesSelectionnees(new Set())
+        definirSourceOuverte(false)
+        definirValidation(null)
+        definirResultat(null)
+        definirProgression(null)
+        definirModeDestination('existante')
+        definirTable('')
+        definirDescription(null)
+        definirCorrespondances({})
+        definirModeDoublon('ligne_exacte')
+        definirClesDoublon(new Set())
+        definirColonneRegles(null)
+        definirPageCorrespondances(1)
+        definirPageApercu(1)
+        definirApercuPrepare(false)
         definirNotification({
           variante: 'succes',
-          message: nouveau.compteurs.inseres > 0
-            ? `Importation terminée : ${nouveau.compteurs.inseres} nouvelle${nouveau.compteurs.inseres > 1 ? 's' : ''} ligne${nouveau.compteurs.inseres > 1 ? 's' : ''} ajoutée${nouveau.compteurs.inseres > 1 ? 's' : ''}.`
-            : 'Importation terminée : aucun nouvel enregistrement à ajouter.'
+          message
         })
         definirOnglet('correspondances')
       } else {
+        definirResultat(nouveau)
         definirNotification({ variante: 'erreur', message: 'L’importation a échoué. Consultez le rapport pour corriger le problème.' })
         definirOnglet('resultats')
       }
     })
     return () => { retirerProgression(); retirerResultat() }
-  }, [idTravail])
+  }, [idTravail, inspection])
 
   utiliserEffet(() => {
     if (!notification) return
@@ -335,6 +351,24 @@ export function ApplicationRefondue() {
 
   const modifierCorrespondance = (id: string, changement: Partial<CorrespondanceColonne>) => {
     definirCorrespondances((actuelles) => ({ ...actuelles, [id]: { ...actuelles[id], ...changement } }))
+    invalider()
+  }
+
+  const changerModeDestination = (mode: ModeDestination) => {
+    definirModeDestination(mode)
+    definirTable('')
+    definirDescription(null)
+    definirCorrespondances({})
+    definirClesDoublon(new Set())
+    definirPageCorrespondances(1)
+    invalider()
+  }
+
+  const regenererNouvelleTable = () => {
+    if (!inspection) return
+    definirCorrespondances(preparerCorrespondancesNouvelleTable(inspection.colonnes, colonnesSelectionnees))
+    definirClesDoublon(new Set())
+    definirPageCorrespondances(1)
     invalider()
   }
 
@@ -422,7 +456,7 @@ export function ApplicationRefondue() {
   const lignesPageApercu = lignesApercu.slice((pageApercuBornee - 1) * parPageApercu, pageApercuBornee * parPageApercu)
   const nomColonneApercu = (id: string) => apercuPrepare ? id : inspection?.colonnes.find((colonne) => colonne.id === id)?.nom ?? id
 
-  const nombrePret = validation ? Math.max(0, validation.compteurs.valides - validation.compteurs.doublonsIgnores - validation.compteurs.conflitsIgnores) : inspection?.totalLignes ?? 0
+  const nombrePret = validation ? Math.max(0, validation.compteurs.valides - validation.compteurs.doublonsIgnores - validation.compteurs.conflitsIgnores) : 0
   const problemes = resultat?.problemes ?? validation?.problemes ?? []
   const correspondanceRegles = colonneRegles ? correspondances[colonneRegles] : undefined
   const sourceRegles = inspection?.colonnes.find((colonne) => colonne.id === colonneRegles)
@@ -430,24 +464,23 @@ export function ApplicationRefondue() {
   return <div className="application-refondue">
     {notification && <div className={`notification-operation notification-operation--${notification.variante}`} role="status" aria-live="polite"><span>{notification.variante === 'succes' ? '✓' : '!'}</span><strong>{notification.message}</strong><button className="bouton-icone" aria-label="Fermer la notification" onClick={() => definirNotification(null)}>×</button></div>}
     <header className="entete-application">
-      <div className="marque"><span className="logo-base">▤</span><strong>Feuille vers PostgreSQL</strong><span>Import sécurisé Excel et CSV</span></div>
+      <div className="marque"><span className="logo-base">▤</span><strong>Feuille vers PostgreSQL</strong><span>Import sécurisé Excel, CSV et TXT</span></div>
       <div className="etat-entete">
-        <span className={`etat-connexion etat-connexion--${etatConnexion}`}><i />{connexion ? `Connecté (${connexion.hote}:${configuration.port})` : etatConnexion === 'connexion' ? 'Connexion…' : 'Non connecté'}</span>
+        <span className={`etat-source ${inspection ? 'etat-source--chargee' : ''}`}><i />{inspection ? 'Fichier chargé' : 'Aucun fichier'}</span>
+        <span className={`etat-connexion etat-connexion--${etatConnexion}`}><i />{connexion ? `Base connectée (${connexion.hote}:${configuration.port})` : etatConnexion === 'connexion' ? 'Connexion à la base…' : 'Base non connectée'}</span>
         {connexion && <button className="bouton-texte" type="button" onClick={() => void deconnecter()}>Déconnecter</button>}
       </div>
     </header>
 
     <main className="espace-travail">
-      <section className={`banniere-etat ${resultat?.reussi || validation?.peutImporter ? 'banniere-etat--succes' : validation ? 'banniere-etat--erreur' : ''}`}>
-        <span className="icone-etat">{resultat?.reussi || validation?.peutImporter ? '✓' : validation ? '!' : '→'}</span>
+      <section className={`banniere-etat ${validation?.peutImporter ? 'banniere-etat--succes' : validation ? 'banniere-etat--erreur' : ''}`}>
+        <span className="icone-etat">{validation?.peutImporter ? '✓' : validation ? '!' : '→'}</span>
         <div>
-          <strong>{resultat?.reussi
-            ? `Importation terminée : ${resultat.compteurs.inseres} ligne${resultat.compteurs.inseres > 1 ? 's' : ''} ajoutée${resultat.compteurs.inseres > 1 ? 's' : ''}.`
-            : validation?.peutImporter
-              ? `Validation réussie : ${nombrePret} ligne${nombrePret > 1 ? 's' : ''} prête${nombrePret > 1 ? 's' : ''} à être importée${nombrePret > 1 ? 's' : ''} dans ${schema}.${table}.`
-              : validation
-                ? `${validation.problemes.filter((probleme) => probleme.gravite === 'erreur').length} problème(s) bloquent l’importation.`
-                : raisonBlocage}</strong>
+          <strong>{validation?.peutImporter
+            ? `Validation réussie : ${nombrePret} ligne${nombrePret > 1 ? 's' : ''} prête${nombrePret > 1 ? 's' : ''} à être importée${nombrePret > 1 ? 's' : ''} dans ${schema}.${table}.`
+            : validation
+              ? `${validation.problemes.filter((probleme) => probleme.gravite === 'erreur').length} problème(s) bloquent l’importation.`
+              : raisonBlocage}</strong>
           <small>{validation?.peutImporter ? 'Valider vérifie le fichier. Importer applique les écritures dans la base de données.' : 'La base existante ne sera jamais modifiée ou vidée automatiquement.'}</small>
         </div>
         <div className="actions-banniere">
@@ -459,7 +492,7 @@ export function ApplicationRefondue() {
       <section className="cartes-configuration">
         <article className="carte-resume">
           <span className="icone-carte">▧</span>
-          {inspection ? <div><strong>{inspection.identite.nom}</strong><Puce enfants={`Feuille : ${inspection.feuille}`} /><small>{inspection.totalLignes} enregistrements · {inspection.colonnes.length} colonnes détectées</small></div> : <div><strong>Aucun fichier sélectionné</strong><small>CSV, XLSX ou XLS</small></div>}
+          {inspection ? <div><strong>{inspection.identite.nom}</strong><Puce enfants={estFichierTexte(inspection.identite.extension) ? `Séparateur : ${libelleSeparateur(inspection.format.separateur)}` : `Feuille : ${inspection.feuille}`} /><small>{inspection.totalLignes} enregistrements · {inspection.colonnes.length} colonnes détectées</small></div> : <div><strong>Aucun fichier sélectionné</strong><small>CSV, TXT, XLSX ou XLS</small></div>}
           <button className="bouton-secondaire" type="button" onClick={() => inspection ? definirSourceOuverte(true) : void choisirSource()}>{inspection ? 'Modifier la source' : 'Parcourir les fichiers'}</button>
         </article>
         <article className="carte-resume">
@@ -479,7 +512,11 @@ export function ApplicationRefondue() {
       <section className="zone-onglet">
         {onglet === 'correspondances' && <>
           {!inspection ? <div className="etat-vide-refonte"><strong>Commencez par choisir un fichier.</strong><button onClick={() => void choisirSource()}>Parcourir les fichiers</button></div> : <>
-            {modeDestination === 'existante' && table && !description ? <div className="alerte-correspondance alerte-correspondance--action"><span>La structure de la table n’est pas chargée. Les champs PostgreSQL ne peuvent pas encore être proposés.</span><button className="bouton-secondaire" onClick={() => void chargerStructureDestination()}>Recharger la table</button></div> : correspondancesActives.some((correspondance) => !correspondance.destination || !correspondance.typeCible) && <div className="alerte-correspondance">Chaque colonne incluse doit avoir une destination. Choisissez un champ PostgreSQL ou décochez la ligne.</div>}
+            {modeDestination === 'existante' && table && !description
+              ? <div className="alerte-correspondance alerte-correspondance--action"><span>La structure de la table n’est pas chargée. Les champs PostgreSQL ne peuvent pas encore être proposés.</span><button className="bouton-secondaire" onClick={() => void chargerStructureDestination()}>Recharger la table</button></div>
+              : correspondancesActives.some((correspondance) => !correspondance.destination || !correspondance.typeCible)
+                ? <div className="alerte-correspondance">Chaque colonne incluse doit avoir une destination. Choisissez un champ PostgreSQL ou décochez la ligne.</div>
+                : modeDestination === 'nouvelle' && <div className="information-correspondance alerte-correspondance--action"><span>Les noms et les types PostgreSQL ont été proposés automatiquement à partir du fichier. Vous pouvez les modifier avant la validation.</span><button className="bouton-secondaire" type="button" onClick={regenererNouvelleTable}>Régénérer depuis le fichier</button></div>}
             <div className="table-refonte"><table><thead><tr><th><input aria-label="Tout inclure" type="checkbox" checked={correspondancesActives.length === colonnesAffichees.length && colonnesAffichees.length > 0} onChange={(evenement) => { definirCorrespondances((actuelles) => Object.fromEntries(Object.entries(actuelles).map(([id, correspondance]) => [id, { ...correspondance, incluse: evenement.target.checked }]))); invalider() }} /></th><th>Colonne source</th><th>Champ PostgreSQL</th><th>Type cible</th><th>Règles de conversion</th><th>Action</th>{modeDoublon === 'cles' && <th>Clé</th>}</tr></thead><tbody>
               {colonnesPage.map((colonne) => {
                 const correspondance = correspondances[colonne.id]
@@ -488,7 +525,7 @@ export function ApplicationRefondue() {
                 return <tr key={colonne.id} className={correspondance.incluse && !correspondance.destination ? 'ligne-incomplete' : ''}>
                   <td><input type="checkbox" aria-label={`Inclure ${colonne.nom}`} checked={correspondance.incluse} onChange={(evenement) => modifierCorrespondance(colonne.id, { incluse: evenement.target.checked })} /></td>
                   <td><strong>{colonne.nom}</strong><small>Col. {colonne.index + 1} · Ex. : {colonne.exemples.slice(0, 2).join(', ') || 'valeurs vides'}</small></td>
-                  <td>{modeDestination === 'existante' ? <select value={correspondance.destination} disabled={!correspondance.incluse || !description} onChange={(evenement) => { const cible = destinations.find((destination) => destination.nom === evenement.target.value); modifierCorrespondance(colonne.id, { destination: evenement.target.value, typeCible: cible?.type ?? '' }) }}><option value="">{description ? 'Non mappé' : 'Table non chargée'}</option>{destinations.map((destination) => <option key={destination.nom} value={destination.nom}>{destination.nom}</option>)}</select> : <input value={correspondance.destination} disabled={!correspondance.incluse} onChange={(evenement) => modifierCorrespondance(colonne.id, { destination: normaliserNom(evenement.target.value) })} />}</td>
+                  <td>{modeDestination === 'existante' ? <select value={correspondance.destination} disabled={!correspondance.incluse || !description} onChange={(evenement) => { const cible = destinations.find((destination) => destination.nom === evenement.target.value); modifierCorrespondance(colonne.id, { destination: evenement.target.value, typeCible: cible?.type ?? '' }) }}><option value="">{description ? 'Non mappé' : 'Table non chargée'}</option>{destinations.map((destination) => <option key={destination.nom} value={destination.nom}>{destination.nom}</option>)}</select> : <input value={correspondance.destination} disabled={!correspondance.incluse} onChange={(evenement) => modifierCorrespondance(colonne.id, { destination: evenement.target.value })} onBlur={(evenement) => { if (evenement.currentTarget.value.trim()) modifierCorrespondance(colonne.id, { destination: normaliserNomPostgreSQL(evenement.currentTarget.value) }) }} />}</td>
                   <td>{modeDestination === 'existante' ? <code>{nomType(correspondance.typeCible) || '—'}</code> : <select value={correspondance.typeCible} disabled={!correspondance.incluse} onChange={(evenement) => modifierCorrespondance(colonne.id, { typeCible: evenement.target.value })}>{typesCreation.map((type) => <option key={type.valeur} value={type.sql}>{type.libelle}</option>)}</select>}</td>
                   <td><div className="liste-puces"><Puce enfants={correspondance.regles.blancs === 'chaine_vide' ? 'Conserver les vides' : 'Vide → NULL'} />{correspondance.regles.ordreDate && <Puce enfants={correspondance.regles.ordreDate === 'jour_mois_annee' ? 'Jour/mois/année' : 'Mois/jour/année'} />}{correspondance.regles.separateurDecimal && <Puce enfants={`Décimal : ${correspondance.regles.separateurDecimal}`} />}</div></td>
                   <td><button className="bouton-lien" type="button" disabled={!correspondance.incluse} onClick={() => definirColonneRegles(colonne.id)}>Règles…</button></td>
@@ -523,15 +560,15 @@ export function ApplicationRefondue() {
 
     <footer className="barre-actions-refondue">
       <div><span className="cadenas">♙</span><span>Transaction atomique : aucune table modifiée en cas d’erreur. Mots de passe non conservés.</span>{idTravail && progression && <progress value={progression.lignesTraitees} max={progression.totalLignes ?? 1} />}</div>
-      <div>{idTravail ? <button className="bouton-danger" onClick={() => void window.importateur.annuler(idTravail)}>Annuler l’importation</button> : <><button className="bouton-secondaire" disabled={!plan || validationActive} title={!plan ? raisonBlocage : ''} onClick={() => void valider()}>{validationActive ? 'Validation…' : 'Valider le fichier'}</button><button className="bouton-principal" disabled={!plan || !validation?.peutImporter} title={!validation?.peutImporter ? 'Validez le fichier sans erreur avant d’importer.' : ''} onClick={() => void importer()}>↥ Importer les {nombrePret} lignes</button></>}</div>
+      <div>{idTravail ? <button className="bouton-danger" onClick={() => void window.importateur.annuler(idTravail)}>Annuler l’importation</button> : <><button className="bouton-secondaire" disabled={!plan || validationActive} title={!plan ? raisonBlocage : ''} onClick={() => void valider()}>{validationActive ? 'Validation…' : 'Valider le fichier'}</button><button className="bouton-principal" disabled={!plan || !validation?.peutImporter} title={!validation?.peutImporter ? 'Validez le fichier sans erreur avant d’importer.' : ''} onClick={() => void importer()}>{validation ? `↥ Importer les ${nombrePret} lignes` : '↥ Importer'}</button></>}</div>
     </footer>
 
     {sourceOuverte && <FenetreModale titre="Source : configuration du classeur" fermer={() => definirSourceOuverte(false)} pied={<><button className="bouton-secondaire" onClick={() => definirSourceOuverte(false)}>Annuler</button><button className="bouton-principal" disabled={!inspection} onClick={() => definirSourceOuverte(false)}>Appliquer</button></>}>
       <label>Fichier sélectionné<div className="champ-action"><input readOnly value={inspection?.identite.nom ?? ''} placeholder="Aucun fichier" /><button className="bouton-secondaire" onClick={() => void choisirSource()}>{chargementSource ? 'Lecture en cours…' : 'Parcourir les fichiers'}</button></div></label>
       {inspection && <>
         <div className="grille-modal">
-          {inspection.identite.extension !== 'csv' && <label>Feuille de calcul<select value={inspection.feuille} onChange={(evenement) => void reInspecter({ feuille: evenement.target.value })}>{inspection.identite.feuilles.map((feuille) => <option key={feuille.nom} value={feuille.nom}>{feuille.nom}{feuille.vide ? ' (vide)' : ''}</option>)}</select></label>}
-          {inspection.identite.extension === 'csv' && <><label>Encodage des caractères<select value={inspection.format.encodage} onChange={(evenement) => void reInspecter({ encodage: evenement.target.value })}><option value="utf8">UTF-8</option><option value="windows-1252">Windows-1252</option><option value="latin1">Latin-1</option></select></label><label>Séparateur<select value={inspection.format.separateur} onChange={(evenement) => void reInspecter({ separateur: evenement.target.value })}><option value=",">Virgule</option><option value=";">Point-virgule</option><option value="\t">Tabulation</option></select></label></>}
+          {!estFichierTexte(inspection.identite.extension) && <label>Feuille de calcul<select value={inspection.feuille} onChange={(evenement) => void reInspecter({ feuille: evenement.target.value })}>{inspection.identite.feuilles.map((feuille) => <option key={feuille.nom} value={feuille.nom}>{feuille.nom}{feuille.vide ? ' (vide)' : ''}</option>)}</select></label>}
+          {estFichierTexte(inspection.identite.extension) && <><label>Encodage des caractères<select value={inspection.format.encodage} onChange={(evenement) => void reInspecter({ encodage: evenement.target.value })}><option value="utf8">UTF-8</option><option value="windows-1252">Windows-1252</option><option value="latin1">Latin-1</option></select></label><label>Séparateur de colonnes<select value={inspection.format.separateur} onChange={(evenement) => void reInspecter({ separateur: evenement.target.value })}><option value=",">Virgule</option><option value=";">Point-virgule</option><option value="\t">Tabulation</option><option value="|">Barre verticale |</option></select></label></>}
         </div>
         <fieldset className="choix-entete"><legend>Détection de la ligne d’en-tête</legend><label className={inspection.modeEntete === 'automatique' ? 'actif' : ''}><input type="radio" checked={inspection.modeEntete === 'automatique'} onChange={() => void reInspecter({ modeEntete: 'automatique' })} /> Ligne {inspection.ligneEntete ?? 1} (Auto)</label><label className={inspection.modeEntete === 'ligne' ? 'actif' : ''}><input type="radio" checked={inspection.modeEntete === 'ligne'} onChange={() => void reInspecter({ modeEntete: 'ligne' })} /> Ligne choisie</label><label className={inspection.modeEntete === 'sans_entete' ? 'actif' : ''}><input type="radio" checked={inspection.modeEntete === 'sans_entete'} onChange={() => void reInspecter({ modeEntete: 'sans_entete' })} /> Sans en-tête</label></fieldset>
         {inspection.modeEntete === 'ligne' && <label>Ligne sélectionnée<input type="number" min="1" value={inspection.ligneEntete ?? 1} onChange={(evenement) => void reInspecter({ ligneEntete: Number(evenement.target.value) })} /></label>}
@@ -546,8 +583,8 @@ export function ApplicationRefondue() {
       <label>Mot de passe<div className="champ-mot-passe"><input type={motDePasseVisible ? 'text' : 'password'} value={configuration.motDePasse} onChange={(evenement) => modifierConfiguration('motDePasse', evenement.target.value)} /><button className="bouton-lien" onClick={() => definirMotDePasseVisible((visible) => !visible)}>{motDePasseVisible ? 'Masquer' : 'Afficher'}</button></div><small>Le mot de passe réside en mémoire volatile et n’est jamais sauvegardé sur le disque.</small></label>
       <details className="options-avancees" open={optionsConnexion} onToggle={(evenement) => definirOptionsConnexion(evenement.currentTarget.open)}><summary>Options sécurisées</summary><div className="grille-modal"><label>TLS<select value={configuration.ssl} onChange={(evenement) => modifierConfiguration('ssl', evenement.target.value as 'desactive' | 'verifie')}><option value="desactive">Désactivé</option><option value="verifie">Certificat vérifié</option></select></label><label>Délai de connexion<input type="number" min="1" max="120" value={configuration.delaiSecondes} onChange={(evenement) => modifierConfiguration('delaiSecondes', Number(evenement.target.value))} /></label></div>{configuration.ssl === 'verifie' && <label>Autorité de certification (PEM)<textarea rows={3} value={configuration.certificatAutorite ?? ''} onChange={(evenement) => modifierConfiguration('certificatAutorite', evenement.target.value)} /></label>}</details>
       <div className="separateur-modal" />
-      <fieldset className="cible-ecriture"><legend>Cible d’écriture</legend><label><input type="radio" checked={modeDestination === 'existante'} onChange={() => { definirModeDestination('existante'); definirTable(''); invalider() }} /> Table existante</label><label><input type="radio" checked={modeDestination === 'nouvelle'} onChange={() => { definirModeDestination('nouvelle'); definirTable(''); invalider() }} /> Créer une nouvelle table</label></fieldset>
-      {connexion && etatConnexion === 'connecte' && <div className="grille-modal"><label>Schéma<select value={schema} onChange={(evenement) => { definirSchema(evenement.target.value); definirTable(''); invalider() }}><option value="">Choisir…</option>{connexion.schemas.map((nom) => <option key={nom}>{nom}</option>)}</select></label>{modeDestination === 'existante' ? <label>Table<select value={table} onChange={(evenement) => { definirTable(evenement.target.value); invalider() }}><option value="">Choisir…</option>{tables.map((candidate) => <option key={candidate.nom}>{candidate.nom}</option>)}</select></label> : <label>Nom de la nouvelle table<input value={table} onChange={(evenement) => { definirTable(evenement.target.value); invalider() }} placeholder="nouvelle_table" /></label>}</div>}
+      <fieldset className="cible-ecriture"><legend>Cible d’écriture</legend><label><input type="radio" checked={modeDestination === 'existante'} onChange={() => changerModeDestination('existante')} /> Table existante</label><label><input type="radio" checked={modeDestination === 'nouvelle'} onChange={() => changerModeDestination('nouvelle')} /> Créer une nouvelle table</label></fieldset>
+      {connexion && etatConnexion === 'connecte' && <div className="grille-modal"><label>Schéma<select value={schema} onChange={(evenement) => { definirSchema(evenement.target.value); definirTable(''); invalider() }}><option value="">Choisir…</option>{connexion.schemas.map((nom) => <option key={nom}>{nom}</option>)}</select></label>{modeDestination === 'existante' ? <label>Table<select value={table} onChange={(evenement) => { definirTable(evenement.target.value); invalider() }}><option value="">Choisir…</option>{tables.map((candidate) => <option key={candidate.nom}>{candidate.nom}</option>)}</select></label> : <label>Nom de la nouvelle table<input value={table} onChange={(evenement) => { definirTable(evenement.target.value); invalider() }} onBlur={(evenement) => { if (evenement.currentTarget.value.trim()) definirTable(normaliserNomPostgreSQL(evenement.currentTarget.value)) }} placeholder="nouvelle_table" /><small>Les noms et les types des colonnes seront proposés automatiquement depuis le fichier.</small></label>}</div>}
       {etatConnexion === 'connecte' && connexion && <p className="succes-modal">Connecté à {connexion.hote} / {connexion.base}</p>}
       {erreurConnexion && <p className="erreur-modal">{erreurConnexion}</p>}
     </FenetreModale>}

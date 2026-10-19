@@ -1,7 +1,7 @@
 {
   "name": "feuille-vers-postgresql",
   "version": "0.1.0",
-  "description": "Importateur de fichiers CSV, XLSX et XLS vers PostgreSQL",
+  "description": "Importateur de fichiers CSV, TXT, XLSX et XLS vers PostgreSQL",
   "main": "dist-electron/principal/principal.js",
   "type": "module",
   "scripts": {

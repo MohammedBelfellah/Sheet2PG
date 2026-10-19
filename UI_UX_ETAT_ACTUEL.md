@@ -2,7 +2,7 @@
 
 ## 1. Objectif du produit
 
-L’application de bureau importe un fichier CSV, XLSX ou XLS dans une base PostgreSQL locale ou distante. Elle s’adresse à une personne qui ne souhaite pas écrire de SQL.
+L’application de bureau importe un fichier CSV, TXT, XLSX ou XLS dans une base PostgreSQL locale ou distante. Elle s’adresse à une personne qui ne souhaite pas écrire de SQL.
 
 Le parcours principal est :
 
@@ -23,13 +23,15 @@ L’application utilise un seul espace de travail vertical, sans barre latérale
 ### Barre supérieure
 
 - nom de l’application ;
-- sous-titre « Excel et CSV vers PostgreSQL » ;
+- sous-titre « Excel, CSV et TXT vers PostgreSQL » ;
 - état global de la connexion PostgreSQL.
 
 ### Bloc 1 — Source
 
 - zone de dépôt de fichier et bouton de sélection ;
+- réouverture du sélecteur dans le dernier dossier utilisé, mémorisé localement entre les sessions ;
 - nom, format et taille du fichier ;
+- détection et modification du séparateur et de l’encodage pour les fichiers CSV et TXT ;
 - sélection de la feuille Excel ;
 - choix du mode d’en-tête : automatique, ligne précise ou sans en-tête ;
 - liste à défilement des colonnes source ;
@@ -202,12 +204,15 @@ La refonte sera réussie si une personne découvrant l’application peut :
 
 La nouvelle interface reprend la direction visuelle validée et remplace la longue page de configuration par une organisation plus compacte :
 
-- barre supérieure avec état de connexion et déconnexion explicite ;
+- barre supérieure avec indicateurs colorés distincts pour le fichier chargé et la connexion PostgreSQL, ainsi qu’une déconnexion explicite ;
 - bannière indiquant la prochaine action, les erreurs ou la réussite de la validation ;
 - cartes récapitulatives de la source et de la destination ;
 - configuration de la source et de PostgreSQL dans des fenêtres modales dédiées ;
 - onglets « Colonnes et correspondances », « Aperçu des données » et « Résultats et rapport » ;
 - tableau de correspondance paginé par groupes de cinq colonnes ;
+- préremplissage des noms et des types PostgreSQL lors de la création d’une table, avec possibilité de modifier ou de régénérer les propositions ;
+- suppression du fichier source en mémoire et remise à zéro complète de l’importation après une réussite, tout en conservant uniquement la connexion PostgreSQL ;
+- confirmation temporaire de la réussite, masquée automatiquement après quelques secondes ;
 - règles avancées ouvertes à la demande pour une seule colonne ;
 - aperçu brut ou préparé paginé ;
 - bilan de validation avec compteurs et rapport structuré ;
@@ -220,4 +225,4 @@ Les choix visuels du prototype ont été adaptés aux règles de sécurité du p
 - le mot de passe est appliqué en mémoire, mais jamais sauvegardé ;
 - les transformations non prises en charge, comme la mise en majuscules automatique, ne sont pas affichées ;
 - l’historique présenté correspond à l’opération courante et n’est pas persisté ;
-- les paramètres d’encodage sont réservés aux fichiers CSV.
+- les paramètres d’encodage et de séparateur sont réservés aux fichiers CSV et TXT.

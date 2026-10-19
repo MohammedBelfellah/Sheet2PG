@@ -31,8 +31,11 @@ body { min-width: 1000px; background: var(--rf-fond); }
 .marque strong { font-size: 16px; }
 .marque > span:last-child { color: var(--rf-secondaire); font-size: 13px; }
 .logo-base { width: 27px; height: 27px; display: grid; place-items: center; color: #fff; background: var(--rf-bleu); border-radius: 6px; font-weight: 800; }
-.etat-connexion { display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; border: 1px solid #dbe4ed; background: #f7f9fc; border-radius: 999px; font-size: 12px; font-weight: 650; }
-.etat-connexion i, .pret-execution i { width: 7px; height: 7px; border-radius: 50%; background: #98a2b3; }
+.etat-connexion, .etat-source { display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; border: 1px solid #dbe4ed; background: #f7f9fc; border-radius: 999px; font-size: 12px; font-weight: 650; }
+.etat-connexion i, .etat-source i, .pret-execution i { width: 7px; height: 7px; border-radius: 50%; background: #98a2b3; }
+.etat-source--chargee { color: #175cd3; border-color: #b2ddff; background: #eff8ff; }
+.etat-source--chargee i { background: #2e90fa; box-shadow: 0 0 0 3px #2e90fa20; }
+.etat-connexion--connecte { color: var(--rf-vert); border-color: #abefc6; background: var(--rf-vert-clair); }
 .etat-connexion--connecte i { background: #12b76a; box-shadow: 0 0 0 3px #12b76a20; }
 .etat-connexion--connexion i, .etat-connexion--perime i { background: #f79009; }
 .etat-connexion--echec i { background: #f04438; }
@@ -84,6 +87,7 @@ body { min-width: 1000px; background: var(--rf-fond); }
 .alerte-correspondance { padding: 9px 13px; color: #93370d; background: #fffaeb; border-bottom: 1px solid #fedf89; font-size: 12px; }
 .alerte-correspondance--action { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .alerte-correspondance--action button { flex: 0 0 auto; padding-top: 6px; padding-bottom: 6px; }
+.information-correspondance { padding: 9px 13px; color: #1849a9; background: #eff8ff; border-bottom: 1px solid #b2ddff; font-size: 12px; }
 .table-refonte { width: 100%; overflow: auto; }
 .table-refonte table { min-width: 880px; font-size: 12px; }
 .table-refonte thead th { height: 42px; background: #f5f8fc; color: #475467; font-size: 11px; }

@@ -4,6 +4,7 @@ import type { PontApplication, ProblemeImportation, ProgressionTravail, Resultat
 const pont: PontApplication = {
   choisirSource: () => communication.invoke('source:choisir'),
   inspecterSource: (options) => communication.invoke('source:inspecter', options),
+  oublierSource: (idSource) => communication.invoke('source:oublier', idSource),
   cheminFichier: (fichier) => outilsWeb.getPathForFile(fichier),
   connecter: (configuration) => communication.invoke('base:connecter', configuration),
   deconnecter: (idConnexion) => communication.invoke('base:deconnecter', idConnexion),
